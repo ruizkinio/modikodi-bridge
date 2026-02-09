@@ -3,6 +3,7 @@ const fetch = require("node-fetch");
 const rateLimit = require("express-rate-limit");
 
 const app = express();
+app.set("trust proxy", 1); // Trust first proxy (Fly.io, Cloudflare, etc.)
 app.use(express.json());
 
 // Rate limiting (100 requests per minute per IP)
