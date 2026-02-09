@@ -34,10 +34,6 @@ ModiKodi is a modified Kodi build that acts as a proper external player for Stre
 
 No configuration needed. Just install and forget.
 
-### Wrapper Mode (Optional)
-
-For 100% reliable identification with opaque debrid URLs, you can wrap your existing stream addon. This embeds IMDB metadata directly into stream URLs.
-
 ## Install
 
 ### One Click (Public Instance)
@@ -83,8 +79,7 @@ Uses the included `render.yaml` for one-click deployment.
 | Feature | Description |
 |---------|-------------|
 | Zero-config content ID | Tracks what you browse in Stremio, serves it to ModiKodi |
-| Wrapper mode | Wraps upstream addons, injects IMDB metadata into stream URLs |
-| Continue Watching | Catalog that shows your partially-watched content in Stremio |
+| Continue Watching | Catalog with real titles and posters (via TMDB) showing partially-watched content |
 | Resume sync | Stores playback positions, serves them back on re-watch |
 | Version endpoint | ModiKodi checks for updates via `/version` |
 | Rate limiting | 100 req/min/IP to prevent abuse |
@@ -100,9 +95,7 @@ Uses the included `render.yaml` for one-click deployment.
 | `GET /identify` | ModiKodi queries this for content metadata |
 | `POST /resume` | ModiKodi reports playback position |
 | `GET /catalog/:type/modikodi-continue.json` | Continue Watching catalog |
-| `GET /version` | Returns current version for update checks |
-| `GET /:upstream/manifest.json` | Wrapper mode manifest |
-| `GET /:upstream/stream/:type/:id.json` | Wrapper mode streams |
+| `GET /version` | Returns current version (with semver fields) for update checks |
 
 ## Environment Variables
 

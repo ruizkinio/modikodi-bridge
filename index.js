@@ -56,6 +56,57 @@ const CONTENT_TTL = 120000; // 2 minutes
 const resumeStore = new Map();
 const RESUME_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// --- TMDB metadata cache ---
+// Key: "tt1234567", Value: { name, poster, ts }
+const metaCache = new Map();
+const META_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const TMDB_API_KEY = "8d6d91941230817f7807d643736e8a49"; // Public TMDB v3 key (free tier)
+
+async function getTmdbMeta(imdbId) {
+  const cached = metaCache.get(imdbId);
+  if (cached && Date.now() - cached.ts < META_CACHE_TTL) return cached;
+
+  try {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`,
+      { timeout: 5000 }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const movie = (data.movie_results || [])[0];
+    const tv = (data.tv_results || [])[0];
+    const item = movie || tv;
+    if (!item) return null;
+
+    const meta = {
+      name: item.title || item.name || imdbId,
+      poster: item.poster_path
+        ? `https://image.tmdb.org/t/p/w342${item.poster_path}`
+        : `https://images.metahub.space/poster/small/${imdbId}/img`,
+      ts: Date.now(),
+    };
+    metaCache.set(imdbId, meta);
+    return meta;
+  } catch (err) {
+    console.error(`[tmdb] Failed for ${imdbId}: ${err.message}`);
+    return null;
+  }
+}
+
+// --- Semver comparison ---
+function compareSemver(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
 function getClientIp(req) {
   // Cloudflare tunnel sends CF-Connecting-IP with the real client IP
   const cfIp = req.headers["cf-connecting-ip"];
@@ -160,42 +211,11 @@ app.get("/configure", (req, res) => {
     <input type="text" id="quickUrl" style="display:none" readonly onclick="this.select()" />
   </div>
 
-  <details>
-    <summary>Advanced: Wrap a specific addon (optional)</summary>
-    <div class="section" style="margin-top: 16px;">
-      <h2>Enhanced Mode <span class="badge badge-blue">Optional</span></h2>
-      <p>For 100% reliable metadata, wrap your stream addon. This injects IMDB IDs directly into
-         stream URLs. Useful for debrid services with opaque URLs.</p>
-      <label>Upstream Addon URL</label>
-      <input id="upstream" type="text" placeholder="https://torrentio.strem.fun/manifest.json" />
-      <p class="hint">
-        In Stremio: <b>Addons</b> &rarr; click your addon &rarr; copy the URL ending in
-        <code>/manifest.json</code>
-      </p>
-      <button class="btn btn-primary" onclick="wrapInstall()">Install Enhanced</button>
-      <div class="result" id="wrapResult">
-        <label>Addon URL:</label>
-        <input id="wrapUrl" type="text" readonly onclick="this.select()" />
-        <div class="buttons">
-          <button class="btn btn-secondary" onclick="copyUrl('wrapUrl')">Copy URL</button>
-        </div>
-        <p style="color:#777; font-size:13px; margin-top:12px;">
-          If Stremio didn't open, copy the URL above and paste it in
-          Stremio &rarr; Addons &rarr; search bar
-        </p>
-      </div>
-    </div>
-  </details>
-
   <div class="info">
     <h3>How it works</h3>
-    <p><b>Quick Install</b> (recommended): The addon silently tracks what content you browse
-       in Stremio. When ModiKodi starts playing, it asks the addon "what was the user just looking at?"
-       and gets the IMDB ID for Trakt scrobbling. Zero configuration.</p>
-    <p><b>Enhanced Mode</b> (optional): Wraps your existing stream addon and embeds IMDB metadata
-       directly in stream URLs. More reliable for opaque debrid URLs, but requires pasting your
-       addon URL once.</p>
-    <p><b>Both modes work together.</b> Install Quick first. Add Enhanced later only if needed.</p>
+    <p>The addon silently tracks what content you browse in Stremio. When ModiKodi starts playing,
+       it asks the addon "what was the user just looking at?" and gets the IMDB ID for Trakt
+       scrobbling. Zero configuration — just install and forget.</p>
   </div>
 
   <script>
@@ -205,16 +225,6 @@ app.get("/configure", (req, res) => {
       document.getElementById("quickUrl").style.display = "block";
       document.getElementById("quickSuccess").style.display = "block";
       window.location.href = "stremio://" + location.host + "/manifest.json";
-    }
-    function wrapInstall() {
-      var raw = document.getElementById("upstream").value.trim();
-      if (!raw) { alert("Enter an upstream addon manifest URL"); return; }
-      var base = raw.replace(/\\/manifest\\.json$/, "");
-      var encoded = btoa(base).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
-      var url = location.origin + "/" + encoded + "/manifest.json";
-      document.getElementById("wrapUrl").value = url;
-      document.getElementById("wrapResult").style.display = "block";
-      window.location.href = "stremio://" + location.host + "/" + encoded + "/manifest.json";
     }
     function copyUrl(id) {
       var el = document.getElementById(id);
@@ -253,20 +263,25 @@ app.get("/manifest.json", (req, res) => {
 
 // --- Version endpoint: ModiKodi checks for updates ---
 app.get("/version", (req, res) => {
-  res.json({ version: BRIDGE_VERSION });
+  const parts = BRIDGE_VERSION.split(".").map(Number);
+  res.json({
+    version: BRIDGE_VERSION,
+    major: parts[0] || 0,
+    minor: parts[1] || 0,
+    patch: parts[2] || 0,
+  });
 });
 
 // --- Continue Watching catalog ---
-app.get("/catalog/:type/modikodi-continue.json", (req, res) => {
+app.get("/catalog/:type/modikodi-continue.json", async (req, res) => {
   const { type } = req.params;
-  const metas = [];
+  const entries = [];
 
   for (const [key, val] of resumeStore) {
     if (Date.now() - val.ts > RESUME_TTL) continue;
     if (!val.duration || val.duration <= 0) continue;
 
     const pct = val.position / val.duration;
-    // Only include if between 5% and 90%
     if (pct < 0.05 || pct > 0.9) continue;
 
     const parts = key.split(":");
@@ -274,20 +289,31 @@ app.get("/catalog/:type/modikodi-continue.json", (req, res) => {
     const season = parts[1];
     const episode = parts[2];
 
-    // Determine type: if season/episode present, it's series
     const isEpisode = season !== undefined && episode !== undefined;
     const entryType = isEpisode ? "series" : "movie";
 
     if (entryType !== type) continue;
-
-    metas.push({
-      id: imdb,
-      type: entryType,
-      name: imdb + (isEpisode ? ` S${season}E${episode}` : ""),
-      poster: `https://images.metahub.space/poster/small/${imdb}/img`,
-      description: `${Math.round(pct * 100)}% watched`,
-    });
+    entries.push({ imdb, season, episode, isEpisode, entryType, pct });
   }
+
+  // Fetch TMDB metadata in parallel
+  const metas = await Promise.all(
+    entries.map(async ({ imdb, season, episode, isEpisode, entryType, pct }) => {
+      const tmdb = await getTmdbMeta(imdb);
+      const name = tmdb ? tmdb.name : imdb;
+      const poster = tmdb
+        ? tmdb.poster
+        : `https://images.metahub.space/poster/small/${imdb}/img`;
+
+      return {
+        id: imdb,
+        type: entryType,
+        name: name + (isEpisode ? ` S${season}E${episode}` : ""),
+        poster,
+        description: `${Math.round(pct * 100)}% watched`,
+      };
+    })
+  );
 
   console.log(`[catalog] ${type}/modikodi-continue -> ${metas.length} items`);
   res.json({ metas });
