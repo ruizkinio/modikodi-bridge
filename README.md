@@ -5,7 +5,9 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/ruizkinio/modikodi-bridge?style=flat-square)
 ![Docker Pulls](https://img.shields.io/docker/pulls/ruizkinio/modikodi-bridge?style=flat-square)
 
-A Stremio addon that enables **Trakt scrobbling** and **content identification** when using [ModiKodi](https://github.com/ruizkinio/ModiKodi) as an external player.
+**[Install in Stremio](https://modikodi-bridge.fly.dev/configure)** | **[Configure Page](https://modikodi-bridge.fly.dev/configure)**
+
+A Stremio addon that enables **Trakt scrobbling** and **content identification** when using [ModiKodi](https://github.com/ruizkinio/ModiKodi-kodi) as an external player.
 
 ## What is ModiKodi?
 
@@ -38,12 +40,18 @@ For 100% reliable identification with opaque debrid URLs, you can wrap your exis
 
 ## Install
 
-### One Click (Hosted)
+### One Click (Public Instance)
 
-Click the button on the configure page of your deployed instance, or paste the manifest URL into Stremio:
+Visit the configure page and click "Install in Stremio":
 
 ```
-https://your-deployment-url/manifest.json
+https://modikodi-bridge.fly.dev/configure
+```
+
+Or paste the manifest URL directly into Stremio's addon search:
+
+```
+https://modikodi-bridge.fly.dev/manifest.json
 ```
 
 ### Self-Host
