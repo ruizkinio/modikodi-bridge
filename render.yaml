@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: modikodi-bridge
+    runtime: node
+    buildCommand: npm ci --production
+    startCommand: node index.js
+    envVars:
+      - key: PORT
+        value: 7515
+      - key: NODE_ENV
+        value: production

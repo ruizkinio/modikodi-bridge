@@ -1,0 +1,14 @@
+{
+  "name": "modikodi-bridge",
+  "version": "1.0.0",
+  "description": "Stremio addon that passes content metadata to ModiKodi for Trakt scrobbling",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "express-rate-limit": "^7.1.0",
+    "node-fetch": "^2.7.0"
+  }
+}
